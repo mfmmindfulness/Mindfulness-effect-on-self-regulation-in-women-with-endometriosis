@@ -232,7 +232,13 @@ hrv.data1.dfab=hrv.data1.df %>%
 
 cog.HRV=read.xlsx("cog.HRV.xlsx")
 
-names(cog.HRV)
+cog.HRV=cog.HRV %>% 
+  mutate(HF_FFT_t1_rest_s = scale(HF_FFT_t1_rest), HF_FFT_t2_rest_s = scale(HF_FFT_t2_rest),
+         rMSSD_t1_recovery_s = scale(rMSSD_t1_recovery), rMSSD_t2_recovery_s = scale(rMSSD_t2_recovery),
+         flanker_total_accuracy_t1_s = scale(flanker_total_accuracy_t1),
+         flanker_total_accuracy_t2_s = scale(flanker_total_accuracy_t2),
+         stroop_time_W_t1_s = scale(stroop_time_W_t1),stroop_time_W_t2_s = scale(stroop_time_W_t2),
+         stroop_time_C_t1_s = scale(stroop_time_C_t1),stroop_time_C_t2_s = scale(stroop_time_C_t2))
 
 # Variables distribution----
 
@@ -276,18 +282,37 @@ cog.HRV %>%
 # Descriptive statistics----
 
 cog.HRV %>% 
-  tbl_summary(by = group, missing = "no", statistic = list(HF_FFT_t1_rest ~ "{mean} ({sd})",
-                                                           HF_FFT_t2_rest ~ "{mean} ({sd})")) %>% 
+  select(-id) %>% 
+  tbl_summary(by = group, missing = "no",
+              statistic = list(all_continuous() ~ "{mean} ({sd})")) %>% 
+  add_n(last = "TRUE")
+
+cog.HRV %>% 
+  select(-id) %>% 
+  tbl_summary(by = group, missing = "no",
+              statistic = list(all_continuous() ~ "{median} ({p25}, {p75})")) %>% 
   add_n(last = "TRUE")
 
 
-
 # Test efficiency of the cognitive stress induction----
+cog.HRV %>%
+  select(id, group,rMSSD_t1_stroop,rMSSD_t1_rest ) %>% 
+  pivot_longer(cols = c("rMSSD_t1_stroop","rMSSD_t1_rest"), names_to = "rmssd" ,values_to = "value") %>% 
+  group_by(rmssd) %>% 
+  drop_na() %>% 
+  summarise(mean=mean(value), sd=sd(value))
+
 
 cog.HRV %>%
   select(id, group,rMSSD_t1_stroop,rMSSD_t1_rest ) %>% 
   pivot_longer(cols = c("rMSSD_t1_stroop","rMSSD_t1_rest"), names_to = "rmssd" ,values_to = "value") %>% 
   wilcox_test(value~rmssd, paired = TRUE, detailed = TRUE) 
+
+
+cog.HRV %>%
+  select(id, group,rMSSD_t1_stroop,rMSSD_t1_rest ) %>% 
+  pivot_longer(cols = c("rMSSD_t1_stroop","rMSSD_t1_rest"), names_to = "rmssd" ,values_to = "value") %>% 
+  t_test(value~rmssd, paired = TRUE, detailed = TRUE) 
 
 
 
@@ -445,32 +470,6 @@ par(mfrow=c(2,2))
 plot(HRV_HF.recovery)
 
 
-#TABLE HRV ANALYSES----
-
-HRV.tab=rest %>%   
-  bind_rows(HRV_stroop.tab, recovery) %>% 
-  mutate_if(is.numeric, round,2) %>% 
-  relocate(any_of(c("term", "estimate", "std.error","statistic","conf.low","conf.high","R2.adj.","p.value"))) %>% 
-  rename(variable=term) %>% 
-  flextable() %>%
-  autofit() %>% 
-  save_as_docx( path = "HRV_models_tab.docx")
-
-
-#adj depression
-
-
-HRV.tab.dep=rest.dep %>%   
-  bind_rows(HRV_stroop.dep.tab, recovery.dep) %>% 
-  mutate_if(is.numeric, round,2) %>% 
-  relocate(any_of(c("term", "estimate", "std.error","statistic","conf.low","conf.high","R2.adj.","p.value"))) %>% 
-  rename(variable=term) %>% 
-  flextable() %>%
-  autofit() %>% 
-  save_as_docx( path = "HRV_models.adj.dep_tab.docx")
-
-
-
 #Flanker accuracy----
 
 flk_accu=lm(flanker_total_accuracy_t2~flanker_total_accuracy_t1+group, data = cog.HRV) 
@@ -528,10 +527,8 @@ flk_congruent.dep.tab=tidy(flk_congruent.dep, conf.int = TRUE) %>%
 
 #Flanker incongruent----
 
-#post
 
-
-flk_incongruent=lm(flanker_mean_incongruent_t2~flanker_mean_incongruent_t1+group, data = cog.HRV) 
+flk_incongruent=lm(flanker_mean_incongruent_t2~flanker_mean_incongruent_t1+group, data = cog.df) 
 summary(flk_incongruent)
 
 
@@ -542,9 +539,9 @@ flk_incongruent.tab=tidy(flk_incongruent, conf.int = TRUE) %>%
 
 cohens_f_squared(flk_incongruent) 
 
-#Flanker incongruent adj depression
+#Flanker incongruent adj depression----
 
-flk_incongruent.dep=lmrob(flanker_mean_incongruent_t2~flanker_mean_incongruent_t1+group+depression, data = cog.HRV) 
+flk_incongruent.dep=lmrob(flanker_mean_incongruent_t2~flanker_mean_incongruent_t1+group+depression, data = cog.df) 
 summary(flk_incongruent.dep)
 
 flk_incongruent.dep.tab=tidy(flk_incongruent.dep, conf.int = TRUE) %>% 
@@ -553,8 +550,8 @@ flk_incongruent.dep.tab=tidy(flk_incongruent.dep, conf.int = TRUE) %>%
 
 #Flanker mean response----
 
-
-flk_mean=lmrob(flanker_mean_response_t2~flanker_mean_response_t1+group, data = cog.HRV) 
+sort(cog.df$flanker_mean_response_t2)
+flk_mean=lmrob(flanker_mean_response_t2~flanker_mean_response_t1+group, data = cog.df) 
 summary(flk_mean)
 
 flk_mean.tab=tidy(flk_mean, conf.int = TRUE) %>% 
@@ -565,9 +562,9 @@ flk_mean.tab=tidy(flk_mean, conf.int = TRUE) %>%
 par(mfrow=c(2,2))
 plot(flk_mean)
 
-#Flanker mean response adj depression
+#Flanker mean response adj depression----
 
-flk_mean.dep=lmrob(flanker_mean_response_t2~flanker_mean_response_t1+group+depression, data = cog.HRV) 
+flk_mean.dep=lmrob(flanker_mean_response_t2~flanker_mean_response_t1+group+depression, data = cog.df) 
 summary(flk_mean.dep)
 
 flk_mean.dep.tab=tidy(flk_mean.dep, conf.int = TRUE) %>% 
@@ -578,14 +575,21 @@ flk_mean.dep.tab=tidy(flk_mean.dep, conf.int = TRUE) %>%
 par(mfrow=c(2,2))
 plot(flk_mean.dep)
 
+#follow-up
+
+flk_mean2=lm(flanker_mean_response_t3~flanker_mean_response_t1+group, data = cog.df2[-c(49),]) 
+summary(flk_mean2)
+
+par(mfrow=c(2,2))
+plot(flk_mean2)
 
 #Flanker conflict cost (incongruent mean - congruent mean)----
-#Positive numbers mean higher cost
+#Positive numbers means higher cost
 
 
+sort(cog.df$flanker_conflict_cost_t2)
 
-
-flk_conflict=lmrob(flanker_conflict_cost_t2~flanker_conflict_cost_t1+group, data = cog.HRV) 
+flk_conflict=lmrob(flanker_conflict_cost_t2~flanker_conflict_cost_t1+group, data = cog.df) 
 summary(flk_conflict)
 
 flk_conflict.tab=tidy(flk_conflict, conf.int = TRUE) %>% 
@@ -598,11 +602,14 @@ plot(flk_conflict)
 
 cohens_f_squared(flk_conflict) 
 
+#T test
+cog.df %>% 
+  select(id, group,flanker_conflict_cost_t2 ) %>% 
+  t_test(flanker_conflict_cost_t2~group ,detailed = TRUE, ref.group = "control") 
 
+#Flanker conflict cost adj depression----
 
-#Flanker conflict cost adj depression
-
-flk_conflict.dep=lmrob(flanker_conflict_cost_t2~flanker_conflict_cost_t1+group+depression, data = cog.HRV) 
+flk_conflict.dep=lmrob(flanker_conflict_cost_t2~flanker_conflict_cost_t1+group+depression, data = cog.df) 
 summary(flk_conflict.dep)
 
 flk_conflict.dep.tab=tidy(flk_conflict.dep, conf.int = TRUE) %>% 
@@ -612,13 +619,15 @@ flk_conflict.dep.tab=tidy(flk_conflict.dep, conf.int = TRUE) %>%
 par(mfrow=c(2,2))
 plot(flk_conflict.dep)
 
-
 #Stroop---- 
 
 #time D----
 
+#post
+cog.df=cog.df%>% 
+  convert(num(stroop_time_D_t1, stroop_time_D_t2))
 
-stroop_D=lm(stroop_time_D_t2~stroop_time_D_t1+group, data = cog.HRV[-c(16),]) 
+stroop_D=lm(stroop_time_D_t2~stroop_time_D_t1+group, data = cog.df[-c(16),]) 
 summary(stroop_D)
 
 stroop_D.tab=tidy(stroop_D, conf.int = TRUE) %>% 
@@ -645,11 +654,11 @@ par(mfrow=c(2,2))
 plot(stroop_D.dep)
 
 
-
 #time W----
+cog.df=cog.df%>% 
+  convert(num(stroop_time_W_t1, stroop_time_W_t2))
 
-
-stroop_W=lm(stroop_time_W_t2~stroop_time_W_t1+group, data = cog.HRV) 
+stroop_W=lm(stroop_time_W_t2~stroop_time_W_t1+group, data = cog.df) 
 summary(stroop_W)
 cohens_f_squared(stroop_W)
 
@@ -662,9 +671,10 @@ plot(stroop_W)
 
 cohens_f_squared(stroop_W) 
 
-#time W adj depression
+#time W adj depression----
 
-stroop_W.dep=lm(stroop_time_W_t2~stroop_time_W_t1+group+depression, data = cog.HRV) 
+
+stroop_W.dep=lm(stroop_time_W_t2~stroop_time_W_t1+group+depression, data = cog.df) 
 summary(stroop_W.dep)
 cohens_f_squared(stroop_W.dep)
 
@@ -676,12 +686,10 @@ par(mfrow=c(2,2))
 plot(stroop_W.dep)
 
 
-
 #conflict response----
 
-#post
 
-stroop_c=lm(stroop_time_C_t2~stroop_time_C_t1+group, data = cog.HRV) 
+stroop_c=lm(stroop_time_C_t2~stroop_time_C_t1+group, data = cog.df) 
 summary(stroop_c)
 
 stroop_c.tab=tidy(stroop_c, conf.int = TRUE) %>% 
@@ -696,7 +704,7 @@ cohens_f_squared(stroop_c)
 #conflict response adj depression----
 
 
-stroop_c.dep=lm(stroop_time_C_t2~stroop_time_C_t1+group+depression, data = cog.HRV) 
+stroop_c.dep=lm(stroop_time_C_t2~stroop_time_C_t1+group+depression, data = cog.df) 
 summary(stroop_c.dep)
 cohens_f_squared(stroop_c.dep)
 
@@ -712,7 +720,7 @@ plot(stroop_c.dep)
 #stroop Interference----
 
 
-stroop_interf=lmrob(stroop_interf_t2~stroop_interf_t1+group, data = cog.HRV) 
+stroop_interf=lmrob(stroop_interf_t2~stroop_interf_t1+group, data = cog.df) 
 summary(stroop_interf)
 
 stroop_interf.tab=tidy(stroop_interf, conf.int = TRUE) %>% 
@@ -728,7 +736,7 @@ cohens_f_squared(stroop_c)
 
 #adj depression----
 
-stroop_interf.dep=lmrob(stroop_interf_t2~stroop_interf_t1+group+depression, data = cog.HRV) 
+stroop_interf.dep=lmrob(stroop_interf_t2~stroop_interf_t1+group+depression, data = cog.df) 
 summary(stroop_interf.dep)
 
 stroop_interf.dep.tab=tidy(stroop_interf.dep, conf.int = TRUE) %>% 
@@ -739,12 +747,12 @@ stroop_interf.dep.tab=tidy(stroop_interf.dep, conf.int = TRUE) %>%
 par(mfrow=c(2,2))
 plot(stroop_D.dep)
 
+
+
 #error total response----
 
-#post
-
-
-stroop_t_error=lm(total_stroop_error_t2~total_stroop_error_t1+group, data = cog.HRV[-c(31),]) 
+sort(cog.df$intrusions_t2)
+stroop_t_error=lm(total_stroop_error_t2~total_stroop_error_t1+group, data = cog.df[-c(31),]) 
 summary(stroop_t_error)
 
 
@@ -756,7 +764,8 @@ par(mfrow=c(2,2))
 plot(stroop_t_error)
 
 cohens_f_squared(stroop_t_error)
-#error total response adj depression
+#error total response adj depression----
+
 
 stroop_t_error.dep=lm(total_stroop_error_t2~total_stroop_error_t1+group+depression, data = cog.df[-c(31),]) 
 summary(stroop_t_error.dep)
@@ -768,6 +777,7 @@ stroop_t_error.dep.tab=tidy(stroop_t_error.dep, conf.int = TRUE) %>%
 
 par(mfrow=c(2,2))
 plot(stroop_t_error.dep)
+
 
 #TABLE COGNITIVE TASKS----
 
@@ -793,6 +803,380 @@ cog.tab.dep=flk_accu.dep.tab  %>%
   flextable() %>%
   autofit() %>% 
   save_as_docx( path = "cog_models_tab.dep.docx")
+
+
+
+
+
+
+
+#percentage of change----
+
+perc.response=cog.HRV %>% 
+  select(id, group,stroop_time_W_t2,stroop_time_W_t1,
+         rMSSD_t1_rest,rMSSD_t2_rest,
+         rMSSD_t1_stroop,rMSSD_t2_stroop,
+         rMSSD_t2_recovery,rMSSD_t1_recovery,
+         HF_FFT_t1_rest,HF_FFT_t2_rest, 
+         stroop_time_C_t2,
+         stroop_time_C_t1,flanker_total_accuracy_t2,flanker_total_accuracy_t1) %>% 
+  mutate (stroop.change =  stroop_time_W_t2 - stroop_time_W_t1,
+          stroop.change.inc = stroop_time_C_t2 - stroop_time_C_t1,
+          flk.change = flanker_total_accuracy_t2 - flanker_total_accuracy_t1,
+          RMSSD.rest.change = rMSSD_t2_rest - rMSSD_t1_rest,
+          RMSSD.change = rMSSD_t2_recovery - rMSSD_t1_recovery,
+          HF.change = HF_FFT_t2_rest - HF_FFT_t1_rest,
+          RMSSD.stroop.change = rMSSD_t2_stroop- rMSSD_t1_stroop)
+
+
+#stroop----
+perc.stroop=perc.response %>% 
+  select(id, group,stroop.change) %>% 
+  mutate(p.response.stroop = case_when(stroop.change >  0 ~ "no_response",
+                                       stroop.change < 0 ~ "response")) %>% 
+  group_by(p.response.stroop,group)
+
+perc.stroop.c=perc.response %>% 
+  select(id, group,stroop.change.inc) %>% 
+  mutate(p.response.stroop.inc = case_when(stroop.change.inc >  0 ~ "no_response",
+                                           stroop.change.inc < 0 ~ "response")) %>% 
+  group_by(p.response.stroop.inc,group)
+
+
+
+
+perc.stroop %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = round(cnt / sum(cnt), 2)) %>% 
+  filter(p.response.stroop%in% c("response")) %>% 
+  select(group,freq) %>% 
+  pivot_wider(names_from = group, values_from = freq) 
+
+
+
+#flanker----
+perc.flk=perc.response %>% 
+  select(id, group,flk.change) %>% 
+  mutate(p.response.flk = case_when(flk.change <=  0 ~ "no_response",
+                                    flk.change > 0 ~ "response")) %>% 
+  group_by(p.response.flk,group)
+
+perc.flk %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = round(cnt / sum(cnt), 2)) %>% 
+  filter(p.response.flk%in% c("response")) %>% 
+  select(group,freq) %>% 
+  pivot_wider(names_from = group, values_from = freq) 
+#RMSSD----  
+
+perc.rmssd=perc.response %>% 
+  select(id,group,RMSSD.change) %>% 
+  mutate(p.response.rmssd = case_when(RMSSD.change >  0 ~ "response",
+                                      RMSSD.change <= 0 ~ "no_response")) %>% 
+  group_by(p.response.rmssd,group)
+
+
+#RMSSD stroop----  
+
+perc.rmssd.stroop=perc.response %>% 
+  select(id, group,RMSSD.stroop.change) %>% 
+  mutate(p.response.rmssd.stroop = case_when(RMSSD.stroop.change >  0 ~ "response",
+                                             RMSSD.stroop.change <= 0 ~ "no_response")) %>% 
+  group_by(p.response.rmssd.stroop,group)
+
+
+#Rest HF----
+
+perc.HF=perc.response %>% 
+  select(id, group,HF.change) %>% 
+  mutate(p.response.HF = case_when(HF.change >  0 ~ "response",
+                                   HF.change <= 0 ~ "no_response")) %>% 
+  group_by(p.response.HF,group)
+
+
+#mean by group of change----
+
+perc.change=perc.flk%>%
+  full_join(perc.stroop, by = c("id", "group")) %>% 
+  full_join(perc.stroop.c, by = c("id", "group")) %>% 
+  full_join(perc.rmssd, by = c("id", "group")) %>% 
+  full_join(perc.HF, by = c("id", "group")) %>% 
+  full_join(perc.rmssd.stroop, by = c("id", "group"))
+
+
+#mean HRV by flk----
+
+perc.change %>% 
+  filter(p.response.flk=="response") %>% 
+  select(id,group, p.response.flk, RMSSD.change,RMSSD.stroop.change, HF.change) %>% 
+  drop_na() %>% 
+  group_by(group,p.response.flk) %>% 
+  summarise(mean.RMSSD = mean(RMSSD.change), 
+            mean.RMSSD.stroop = mean(RMSSD.stroop.change),
+            mean.HF = mean(HF.change)) 
+
+#mean HRV by stroop W----
+
+perc.change %>% 
+  filter(p.response.stroop=="response") %>% 
+  select(id,group, p.response.stroop, RMSSD.change,RMSSD.stroop.change, HF.change) %>% 
+  drop_na() %>% 
+  group_by(group,p.response.stroop) %>% 
+  summarise(mean.RMSSD = mean(RMSSD.change), 
+            mean.RMSSD.stroop = mean(RMSSD.stroop.change),
+            mean.HF = mean(HF.change))
+
+
+#stroop c----
+
+perc.change %>% 
+  filter(p.response.stroop.inc=="response") %>% 
+  select(id,group, p.response.stroop.inc, RMSSD.change,RMSSD.stroop.change, HF.change) %>% 
+  drop_na() %>% 
+  group_by(group,p.response.stroop.inc) %>% 
+  summarise(mean.RMSSD = mean(RMSSD.change), 
+            mean.RMSSD.stroop = mean(RMSSD.stroop.change),
+            mean.HF = mean(HF.change))
+
+
+#MEDIATOR ANALYSIS----
+
+#MBI-->Stroop w--->RMSSD recovery
+
+
+MIB_stroop_RMSSD1= '
+
+# Path c
+
+rMSSD_t2_recovery_s~c*group+rMSSD_t1_recovery_s
+
+
+# Path a
+
+stroop_time_W_t2_s~a*group+stroop_time_W_t1_s
+
+
+# Path b
+
+rMSSD_t2_recovery_s~b*stroop_time_W_t2_s+stroop_time_W_t1_s
+
+
+
+ab:=a*b
+
+'
+
+# Fit/estimate the model
+set.seed(2021)
+
+MIB_stroop_RMSSD.mod1=sem(MIB_stroop_RMSSD1, cog.HRV, se="bootstrap", bootstrap= 2000)
+
+# Summarize the results/output
+
+sum.MIB_stroop_RMSSD.mod1=summary(MIB_stroop_RMSSD.mod1, fit.measures=TRUE, standardized= TRUE, rsquare= TRUE)
+
+
+MIB_stroop_RMSSD.mod.par1=parameterEstimates(MIB_stroop_RMSSD.mod1, ci=TRUE, level=0.95, boot.ci.type= "perc")
+
+
+
+MIB_stroop_RMSSD.index.mod.stand1=standardizedSolution(MIB_stroop_RMSSD.mod1)
+
+
+#MBI-->Flanker accurary--->RMSSD recovery
+
+MIB_flk_RMSSD1= '
+
+# Path c
+
+rMSSD_t2_recovery_s~c*group+rMSSD_t1_recovery_s
+
+
+# Path a
+
+flanker_total_accuracy_t2_s~a*group+flanker_total_accuracy_t1_s
+
+
+# Path b
+
+rMSSD_t2_recovery_s~b*flanker_total_accuracy_t2_s+flanker_total_accuracy_t1_s
+
+
+
+ab:=a*b
+
+'
+
+# Fit/estimate the model
+set.seed(2021)
+
+MIB_flk_RMSSD.mod1=sem(MIB_flk_RMSSD1, cog.HRV, se="bootstrap", bootstrap= 2000)
+
+# Summarize the results/output
+
+sum.MIB_flk_RMSSD.mod1=summary(MIB_flk_RMSSD.mod1, fit.measures=TRUE, standardized= TRUE, rsquare= TRUE)
+
+
+MIB_flk_RMSSD.mod.par1=parameterEstimates(MIB_flk_RMSSD.mod1, ci=TRUE, level=0.95, boot.ci.type= "perc")
+
+
+
+MIB_flk_RMSSD.index.mod.stand1=standardizedSolution(MIB_flk_RMSSD.mod1)
+
+
+
+#MBI-->Stroop W--->Rest HF
+
+
+MIB_stroop_HF1= '
+
+# Path c
+
+HF_FFT_t2_rest_s~c*group+HF_FFT_t1_rest_s
+
+
+# Path a
+
+stroop_time_W_t2_s~a*group+stroop_time_W_t1_s
+
+
+# Path b
+
+HF_FFT_t2_rest_s~b*stroop_time_W_t2_s+stroop_time_W_t1_s
+
+
+
+ab:=a*b
+
+'
+
+# Fit/estimate the model
+set.seed(2021)
+
+MIB_stroop_HF.mod1=sem(MIB_stroop_HF1, cog.HRV, se="bootstrap", bootstrap= 2000)
+
+# Summarize the results/output
+
+sum.MIB_stroop_HF.mod1=summary(MIB_stroop_HF.mod1, fit.measures=TRUE, standardized= TRUE, rsquare= TRUE)
+
+
+MIB_stroop_HF.mod.par1=parameterEstimates(MIB_stroop_HF.mod1, ci=TRUE, level=0.95, boot.ci.type= "perc")
+
+
+#MBI-->Flanker accuracy-->Rest HF
+
+
+MIB_flk_HF1= '
+
+# Path c
+
+HF_FFT_t2_rest_s~c*group+HF_FFT_t1_rest_s
+
+
+# Path a
+
+flanker_total_accuracy_t2_s~a*group+flanker_total_accuracy_t1_s
+
+
+# Path b
+
+HF_FFT_t2_rest_s~b*flanker_total_accuracy_t2_s+flanker_total_accuracy_t1_s
+
+
+
+ab:=a*b
+
+'
+
+# Fit/estimate the model
+set.seed(2021)
+
+MIB_flk_HF.mod1=sem(MIB_flk_HF1, cog.HRV, se="bootstrap", bootstrap= 2000)
+
+# Summarize the results/output
+
+sum.MIB_flk_HF.mod1=summary(MIB_flk_HF.mod1, fit.measures=TRUE, standardized= TRUE, rsquare= TRUE)
+
+
+MIB_flk_HF.mod.par1=parameterEstimates(MIB_flk_HF.mod1, ci=TRUE, level=0.95, boot.ci.type= "perc")
+
+#MBI-->Stroop W--->Affective Pain
+
+
+MIB_stroop_pain.affect1= '
+
+
+# Path c
+
+pain.affective_t2_s~c*group+pain.affective_t1_s
+
+
+# Path a
+
+stroop_time_W_t2_s~a*group+stroop_time_W_t1_s
+
+
+# Path b
+
+pain.affective_t2_s~b*stroop_time_W_t2_s+stroop_time_W_t1_s
+
+
+
+ab:=a*b
+
+'
+
+# Fit/estimate the model
+set.seed(2021)
+
+MIB_stroop_pain.affect.mod1=sem(MIB_stroop_pain.affect1,cog.HRV, se="bootstrap", bootstrap= 2000)
+
+# Summarize the results/output
+
+sum.MIB_stroop_pain.affect.mod1=summary(MIB_stroop_pain.affect.mod1, fit.measures=TRUE, standardized= TRUE, rsquare= TRUE)
+
+
+MIB_stroop_pain.affect.mod.par1=parameterEstimates(MIB_stroop_pain.affect.mod1, ci=TRUE, level=0.95, boot.ci.type= "perc")
+
+#MBI-->Flanker accuracy-->Affective Pain
+
+
+MIB_flk_pain.affect1= '
+
+# Path c
+
+pain.affective_t2_s~c*group+pain.affective_t1_s
+
+
+# Path a
+
+flanker_total_accuracy_t2_s~a*group+flanker_total_accuracy_t1_s
+
+
+# Path b
+
+pain.affective_t1_s~b*flanker_total_accuracy_t2_s+flanker_total_accuracy_t1_s
+
+
+
+ab:=a*b
+
+'
+
+# Fit/estimate the model
+set.seed(2021)
+
+MIB_flk_pain.affect.mod1=sem(MIB_flk_pain.affect1, cog.HRV, se="bootstrap", bootstrap= 2000)
+
+# Summarize the results/output
+
+sum.MIB_flk_pain.affect.mod1=summary(MIB_flk_pain.affect.mod1, fit.measures=TRUE, standardized= TRUE, rsquare= TRUE)
+
+
+MIB_flk_pain.affect.mod.par1=parameterEstimates(MIB_flk_pain.affect.mod1, ci=TRUE, level=0.95, boot.ci.type= "perc")
+
+
+
 
 
 
